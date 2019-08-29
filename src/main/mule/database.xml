@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="0e22f524-91b2-4529-b41a-37100c63edaf" >
+		<http:listener-connection host="0.0.0.0" port="8082" />
+	</http:listener-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="08d47b01-a07e-4cdd-bf02-46f4fac0ac8e" >
+		<db:mssql-connection host="GGKU3DELL1143" user="sreekar" password="Welcome@1234" databaseName="Sample" />
+	</db:config>
+	<ee:object-store-caching-strategy name="Caching_Strategy" doc:name="Caching Strategy" doc:id="b623c175-b110-4cc6-90d6-5f91b145781d" objectStore="Object_store">
+	</ee:object-store-caching-strategy>
+	<os:config name="ObjectStore_Config" doc:name="ObjectStore Config" doc:id="b9db8b93-3dc9-4438-9c71-8684142a32f8" >
+		<os:connection >
+			<reconnection failsDeployment="true" >
+				<reconnect />
+			</reconnection>
+		</os:connection>
+	</os:config>
+	<os:object-store name="Object_store" doc:name="Object store" doc:id="f44f32e2-b8b0-452a-8da4-6a6e8309f00a" maxEntries="1000" entryTtl="1" entryTtlUnit="HOURS" expirationIntervalUnit="HOURS" config-ref="ObjectStore_Config" />
+	<os:object-store name="Object_store1" doc:name="Object store" doc:id="79b0ff06-9894-426c-91cd-dcd7233cb73c" maxEntries="1000" entryTtl="10" expirationIntervalUnit="SECONDS" config-ref="ObjectStore_Config" expirationInterval="10"/>
+	<ee:object-store-caching-strategy name="StudentCachingStrategy" doc:name="Caching Strategy" doc:id="a1b5d489-0315-47cc-b004-063e1398b1c9" keyGenerationExpression="#[vars.cacheKey]" objectStore="Object_store1" />
+	<flow name="databaseFlow" doc:id="6c788ece-8c24-4ef9-a7d6-6f40853fe93c" >
+		<http:listener doc:name="Listener" doc:id="a36000ec-544d-4a74-b27f-0c45e76a3296" config-ref="HTTP_Listener_config" path="/students"/>
+		<set-variable value="#[message.attributes.requestUri]" doc:name="CacheKey" doc:id="e1c9517e-3541-4d40-b9cb-479c0fa34f01" variableName="cacheKey"/>
+		<logger level="INFO" doc:name="Logger" doc:id="203aaed5-1589-4d86-a38e-da0952e2f58a" message="#[vars.cacheKey]"/>
+		<ee:cache doc:name="Cache" doc:id="0dc4d4b4-7bd7-4393-8d12-46b1d1d1c504" cachingStrategy-ref="StudentCachingStrategy">
+			<flow-ref doc:name="Get Data From DB" doc:id="c5f9168d-019d-448a-8894-fe361d3a8ed1" name="GetDataFromDB"/>
+		</ee:cache>
+	</flow>
+	<flow name="GetDataFromDB" doc:id="054e42b6-f7b4-42cc-8a5f-cf4b1352286a" >
+		<logger level="INFO" doc:name="Logger" doc:id="a11b74c5-2ef0-4403-968c-e85ddc229855" message="This is a log from Get Data From DB FLow"/>
+		<set-variable value="#[message.attributes.queryParams.sid]" doc:name="Set Variable" doc:id="a85e3790-8327-415f-be7b-1ed7ee785576" variableName="sid" />
+		<db:select doc:name="Select" doc:id="f3130f7f-01c1-453a-9e2f-57faf312807f" config-ref="Database_Config">
+			<db:sql>SELECT * FROM student WHERE id = :id</db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	id: vars.sid
+}]]]></db:input-parameters>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="bb8bafc3-ad59-4072-a84a-001164d0a2ba">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<flow-ref doc:name="Flow Reference" doc:id="86a72bd3-c8d0-4830-bce4-1365559b7cc6" name="sampleFlow"/>
+	</flow>
+</mule>
